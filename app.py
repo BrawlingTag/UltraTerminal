@@ -1,6 +1,7 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+import plotly.graph_objects as go
 
 st.set_page_config(page_title="Ultrascore Screener", page_icon="📈", layout="wide")
 
@@ -90,9 +91,14 @@ def lade_aktien():
 @st.cache_data(ttl=60 * 60, show_spinner=False)
 def lade_markt():
     vix = yf.Ticker("^VIX").history(period="5d")["Close"].iloc[-1]
-    welt = yf.Ticker("SPYI.DE").history(period="2y")["Close"]   # MSCI ACWI IMI (SPDR-ETF)
+    welt = yf.Ticker("SPYI.DE").history(period="max")["Close"]  # MSCI ACWI IMI, Abstand zum Allzeithoch
     welt_dd = welt.iloc[-1] / welt.max() - 1
     return vix, welt_dd
+
+
+@st.cache_data(ttl=60 * 60, show_spinner=False)
+def lade_welt():
+    return yf.Ticker("SPYI.DE").history(period="max")["Close"]   # MSCI ACWI IMI, ganze Historie
 
 
 @st.cache_data(ttl=60 * 60 * 24, show_spinner=False)
@@ -131,12 +137,55 @@ try:
     c1, c2, c3 = st.columns(3)
     c1.metric("VIX (Angst-Index)", f"{vix:.1f}")
     c2.metric("MSCI ACWI IMI unter Hoch", f"{welt_dd * 100:.1f} %")
-    if vix > 17.4 or welt_dd < -0.07:
+    if vix > 25 or welt_dd < -0.10:
         c3.error("🔴 Angstphase – Screener ist scharf!")
     else:
         c3.success("🟢 Keine Angstphase – beobachten")
 except Exception:
     st.warning("Marktdaten konnten gerade nicht geladen werden.")
+
+# MSCI ACWI IMI mit EMA 100 und Linien unter dem Allzeithoch
+st.subheader("🌍 MSCI ACWI IMI – Einstiegszonen")
+try:
+    welt_voll = lade_welt()
+    # Erst auf der ganzen Historie rechnen, damit EMA und Allzeithoch korrekt sind
+    ema100 = welt_voll.ewm(span=100, adjust=False).mean()
+    ath = welt_voll.cummax()                 # Allzeithoch bis zu jedem Tag
+    linie_5 = ath * 0.95                     # 5 % unter dem Allzeithoch
+    linie_75 = ath * 0.925                   # 7,5 % unter dem Allzeithoch
+
+    zeitraum = st.radio("Zeitraum", ["1 Jahr", "3 Jahre", "5 Jahre", "Max"],
+                        index=1, horizontal=True)
+    jahre = {"1 Jahr": 1, "3 Jahre": 3, "5 Jahre": 5}.get(zeitraum)
+    start = welt_voll.index[-1] - pd.DateOffset(years=jahre) if jahre else welt_voll.index[0]
+    ab = welt_voll.index >= start
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=welt_voll.index[ab], y=welt_voll[ab], name="MSCI ACWI IMI",
+                             line=dict(color="#9ca3af", width=1.5)))
+    fig.add_trace(go.Scatter(x=welt_voll.index[ab], y=ema100[ab], name="EMA 100",
+                             line=dict(color="#facc15", width=2)))
+    fig.add_trace(go.Scatter(x=welt_voll.index[ab], y=linie_5[ab], name="−5 % unter Allzeithoch",
+                             line=dict(color="#2563eb", width=1.5)))
+    fig.add_trace(go.Scatter(x=welt_voll.index[ab], y=linie_75[ab], name="−7,5 % unter Allzeithoch",
+                             line=dict(color="#7dd3fc", width=1.5)))
+    fig.update_layout(height=450, hovermode="x unified",
+                      margin=dict(l=0, r=0, t=30, b=0),
+                      legend=dict(orientation="h", y=1.1))
+    st.plotly_chart(fig)
+
+    kurs_jetzt = welt_voll.iloc[-1]
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Abstand zum Allzeithoch", f"{(kurs_jetzt / ath.iloc[-1] - 1) * 100:.1f} %")
+    c2.metric("Abstand zur EMA 100", f"{(kurs_jetzt / ema100.iloc[-1] - 1) * 100:.1f} %")
+    if kurs_jetzt < linie_75.iloc[-1]:
+        c3.error("Unter der −7,5 %-Linie")
+    elif kurs_jetzt < linie_5.iloc[-1]:
+        c3.warning("Unter der −5 %-Linie")
+    else:
+        c3.success("Über beiden Linien")
+except Exception:
+    st.warning("Der MSCI-ACWI-IMI-Chart konnte gerade nicht geladen werden.")
 
 # Aktiendaten
 with st.spinner("Lade Daten für 80 Aktien … beim ersten Mal dauert das 3–5 Minuten."):
