@@ -162,8 +162,8 @@ try:
     # Erst auf der ganzen Historie rechnen, damit EMA und Allzeithoch korrekt sind
     ema100 = welt_voll.ewm(span=100, adjust=False).mean()
     ath = welt_voll.cummax()                 # Allzeithoch bis zu jedem Tag
-    linie_5 = ath * 0.95                     # 5 % unter dem Allzeithoch
-    linie_75 = ath * 0.925                   # 7,5 % unter dem Allzeithoch
+    linie_5 = ath * 0.97                     # 3 % unter dem Allzeithoch
+    linie_75 = ath * 0.92                  # 8 % unter dem Allzeithoch
 
     zeitraum = st.radio("Zeitraum", ["1 Jahr", "3 Jahre", "5 Jahre", "Max"],
                         index=1, horizontal=True)
@@ -176,9 +176,9 @@ try:
                              line=dict(color="#9ca3af", width=1.5)))
     fig.add_trace(go.Scatter(x=welt_voll.index[ab], y=ema100[ab], name="EMA 100",
                              line=dict(color="#facc15", width=2)))
-    fig.add_trace(go.Scatter(x=welt_voll.index[ab], y=linie_5[ab], name="−5 % unter Allzeithoch",
+    fig.add_trace(go.Scatter(x=welt_voll.index[ab], y=linie_5[ab], name="−3 % unter Allzeithoch",
                              line=dict(color="#2563eb", width=1.5)))
-    fig.add_trace(go.Scatter(x=welt_voll.index[ab], y=linie_75[ab], name="−7,5 % unter Allzeithoch",
+    fig.add_trace(go.Scatter(x=welt_voll.index[ab], y=linie_75[ab], name="−8 % unter Allzeithoch",
                              line=dict(color="#7dd3fc", width=1.5)))
     fig.update_layout(height=450, hovermode="x unified",
                       margin=dict(l=0, r=0, t=30, b=0),
@@ -190,9 +190,9 @@ try:
     c1.metric("Abstand zum Allzeithoch", f"{(kurs_jetzt / ath.iloc[-1] - 1) * 100:.1f} %")
     c2.metric("Abstand zur EMA 100", f"{(kurs_jetzt / ema100.iloc[-1] - 1) * 100:.1f} %")
     if kurs_jetzt < linie_75.iloc[-1]:
-        c3.error("Unter der −7,5 %-Linie")
+        c3.error("Unter der 8 %-Linie")
     elif kurs_jetzt < linie_5.iloc[-1]:
-        c3.warning("Unter der −5 %-Linie")
+        c3.warning("Unter der 3 %-Linie")
     else:
         c3.success("Über beiden Linien")
 except Exception:
