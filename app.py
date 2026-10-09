@@ -131,7 +131,7 @@ try:
     c1, c2, c3 = st.columns(3)
     c1.metric("VIX (Angst-Index)", f"{vix:.1f}")
     c2.metric("MSCI ACWI IMI unter Hoch", f"{welt_dd * 100:.1f} %")
-    if vix > 12 or welt_dd < -0.10:
+    if vix > 17.4 or welt_dd < -0.07:
         c3.error("🔴 Angstphase – Screener ist scharf!")
     else:
         c3.success("🟢 Keine Angstphase – beobachten")
