@@ -88,17 +88,28 @@ def lade_aktien():
     return pd.DataFrame(zeilen)
 
 
-@st.cache_data(ttl=60 * 60, show_spinner=False)
-def lade_markt():
-    vix = yf.Ticker("^VIX").history(period="5d")["Close"].iloc[-1]
-    welt = yf.Ticker("SPYI.DE").history(period="max")["Close"]  # MSCI ACWI IMI, Abstand zum Allzeithoch
-    welt_dd = welt.iloc[-1] / welt.max() - 1
-    return vix, welt_dd
+def bereinigen(kurs):
+    """Entfernt Datenfehler von Yahoo: Ein Welt-ETF kann nicht an einem Tag
+    um mehr als 20 % springen. Solche Sprünge werden auf 0 % gesetzt und der
+    Kurs aus den übrigen Tagesrenditen neu aufgebaut."""
+    rendite = kurs.pct_change().fillna(0)
+    rendite[rendite.abs() > 0.20] = 0
+    neu = (1 + rendite).cumprod()
+    return neu / neu.iloc[-1] * kurs.iloc[-1]   # heutiger Kurs bleibt gleich
 
 
 @st.cache_data(ttl=60 * 60, show_spinner=False)
 def lade_welt():
-    return yf.Ticker("SPYI.DE").history(period="max")["Close"]   # MSCI ACWI IMI, ganze Historie
+    kurs = yf.Ticker("SPYI.DE").history(period="max")["Close"]   # MSCI ACWI IMI, ganze Historie
+    return bereinigen(kurs.dropna())
+
+
+@st.cache_data(ttl=60 * 60, show_spinner=False)
+def lade_markt():
+    vix = yf.Ticker("^VIX").history(period="5d")["Close"].iloc[-1]
+    welt = lade_welt()
+    welt_dd = welt.iloc[-1] / welt.max() - 1    # Abstand zum Allzeithoch
+    return vix, welt_dd
 
 
 @st.cache_data(ttl=60 * 60 * 24, show_spinner=False)
@@ -136,8 +147,8 @@ try:
     vix, welt_dd = lade_markt()
     c1, c2, c3 = st.columns(3)
     c1.metric("VIX (Angst-Index)", f"{vix:.1f}")
-    c2.metric("MSCI ACWI IMI unter Hoch", f"{welt_dd * 100:.1f} %")
-    if vix > 25 or welt_dd < -0.10:
+    c2.metric("MSCI ACWI IMI unter Allzeithoch", f"{welt_dd * 100:.1f} %")
+    if vix > 17.4 or welt_dd < -0.07:
         c3.error("🔴 Angstphase – Screener ist scharf!")
     else:
         c3.success("🟢 Keine Angstphase – beobachten")
